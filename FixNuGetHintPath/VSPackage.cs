@@ -6,23 +6,18 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
-using System.ComponentModel.Design;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EnvDTE;
-using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.ComponentModelHost;
+using Microsoft.Build.Evaluation;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using Microsoft.Win32;
-using NuGet.ProjectManagement;
-using NuGet.VisualStudio;
+using VSLangProj;
+using Project = EnvDTE.Project;
 
 namespace FixNuGetHintPath
 {
@@ -50,6 +45,8 @@ namespace FixNuGetHintPath
     [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     public sealed class VSPackage : Package
     {
+        private SolutionEvents _SolutionEvents;
+        private List<Tuple<Project, ReferencesEvents>> _ReferencesAddedEvents;
         public const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
 
         #region Package Members
@@ -60,53 +57,70 @@ namespace FixNuGetHintPath
         /// </summary>
         protected override void Initialize()
         {
-            var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
+            var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
 
-            var installerEvents = componentModel.GetService<IVsPackageInstallerEvents>();
-            var installerService = componentModel.GetService<IVsPackageInstallerServices>();
-
-            var installing = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
-                (h => new VsPackageEventHandler(h)
-                , h => installerEvents.PackageInstalling += h
-                , h => installerEvents.PackageInstalling -= h
-                )
-                .Select(_ => GetProjectPackages(installerService));
-
-            var installed = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
-                (h => new VsPackageEventHandler(h)
-                , h => installerEvents.PackageInstalled += h
-                , h => installerEvents.PackageInstalled -= h
-                )
-                .Do(x => { });
-
-            installing
-                .Zip(installed, (oldProjectPackages, newPackage) =>
-                {
-                    return GetProjectPackages(installerService)
-                        .Where(x => x.Value.Any(m => m.Id == newPackage.Id))
-                        .Select(x => x.Key)
-                        .Single(x => oldProjectPackages[x].All(m => m.Id != newPackage.Id));
-                })
-                .Subscribe((Project project) =>
+            _SolutionEvents = dte.Events.SolutionEvents;
+            _SolutionEvents.Opened += () =>
+            {
+                _ReferencesAddedEvents = dte.Solution.Projects.Cast<Project>()
+                    .Select(p =>
+                    {
+                        var vsProject = (VSProject) p.Object;
+                        return Tuple.Create(p, vsProject.Events.ReferencesEvents);
+                    })
+                    .ToList();
+                _ReferencesAddedEvents.Select(x =>
                 {
                     try
                     {
-                        var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
+                        return Observable.FromEvent<_dispReferencesEvents_ReferenceAddedEventHandler, Reference>
+                            (h => new _dispReferencesEvents_ReferenceAddedEventHandler(h)
+                                , h => x.Item2.ReferenceAdded += h
+                                , h => x.Item2.ReferenceAdded -= h
+                            )
+                            .Select(reference => new {Project = x.Item1, Reference = reference});
                     }
-                    catch (Exception ex)
+                    catch (Exception e)
                     {
-                        Console.WriteLine(ex);
+                        return Observable.Empty(new {Project = (Project) null, Reference = (Reference) null});
                     }
+                })
+                .Merge()
+                .ObserveOn(SynchronizationContext.Current)
+                .Subscribe(x =>
+                {
+                    var project = AsMsBuildProject(x.Project);
+                    FixReferences(project, Path.GetDirectoryName(dte.Solution.FullName));
+                    x.Project.Save();
                 });
+            };
+
             base.Initialize();
         }
 
-        private IDictionary<Project, IReadOnlyCollection<IVsPackageMetadata>> GetProjectPackages(IVsPackageInstallerServices installerService)
+        private static void FixReferences(Microsoft.Build.Evaluation.Project project, string slnDir)
         {
-            var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
-            return dte.Solution.Projects
-                .Cast<Project>()
-                .ToDictionary(x => x, x => (IReadOnlyCollection<IVsPackageMetadata>)installerService.GetInstalledPackages(x).ToList());
+            foreach (var reference in project.GetItems("Reference"))
+            {
+                var hintPath = reference.GetMetadataValue("HintPath");
+                if (string.IsNullOrEmpty(hintPath))
+                {
+                    continue;
+                }
+                var absoluteHintPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, hintPath));
+                if (!absoluteHintPath.StartsWith(slnDir))
+                {
+                    continue;
+                }
+                var path = absoluteHintPath.Substring(slnDir.Length).TrimStart(Path.DirectorySeparatorChar);
+                reference.SetMetadataValue("HintPath", @"$(SolutionDir)\" + path);
+            }
+        }
+
+        private static Microsoft.Build.Evaluation.Project AsMsBuildProject(Project project)
+        {
+            return ProjectCollection.GlobalProjectCollection.GetLoadedProjects(project.FullName).FirstOrDefault() ??
+                   ProjectCollection.GlobalProjectCollection.LoadProject(project.FullName);
         }
 
         #endregion
