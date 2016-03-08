@@ -9,13 +9,16 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EnvDTE;
 using Microsoft.Build.Evaluation;
+using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using NuGet.VisualStudio;
 using VSLangProj;
 using Project = EnvDTE.Project;
 
@@ -45,8 +48,8 @@ namespace FixNuGetHintPath
     [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     public sealed class VSPackage : Package
     {
-        private SolutionEvents _SolutionEvents;
         private List<Tuple<Project, ReferencesEvents>> _ReferencesAddedEvents;
+        private IDisposable _Subscription;
         public const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
 
         #region Package Members
@@ -57,48 +60,79 @@ namespace FixNuGetHintPath
         /// </summary>
         protected override void Initialize()
         {
+            var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
+
+            var installerEvents = componentModel.GetService<IVsPackageInstallerEvents>();
+
             var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
 
-            _SolutionEvents = dte.Events.SolutionEvents;
-            _SolutionEvents.Opened += () =>
-            {
-                _ReferencesAddedEvents = dte.Solution.Projects.Cast<Project>()
-                    .Select(p =>
-                    {
-                        var vsProject = (VSProject) p.Object;
-                        return Tuple.Create(p, vsProject.Events.ReferencesEvents);
-                    })
-                    .ToList();
-                _ReferencesAddedEvents.Select(x =>
+            // The events used here occur in the following order when a NuGet package is installed:
+            // 1. IVsPackageInstallerEvents.PackageInstalled
+            // 2. Project.Events.ReferencesEvents.ReferenceAdded
+            // 3. IVsPackageInstallerEvents.PackageReferenceAdded
+
+            var packageInstalled = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
+                (h => new VsPackageEventHandler(h)
+                    , h => installerEvents.PackageInstalled += h
+                    , h => installerEvents.PackageInstalled -= h
+                );
+
+            var installFinished = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
+                (h => new VsPackageEventHandler(h)
+                    , h => installerEvents.PackageReferenceAdded += h
+                    , h => installerEvents.PackageReferenceAdded -= h
+                );
+
+            _Subscription = packageInstalled
+                .Where(x => x.InstallPath.StartsWith(GetSolutionDir(dte)))
+                .Do(_ =>
                 {
-                    try
-                    {
-                        return Observable.FromEvent<_dispReferencesEvents_ReferenceAddedEventHandler, Reference>
+                    _ReferencesAddedEvents = dte.Solution.Projects.Cast<Project>()
+                        .Select(p =>
+                        {
+                            var vsProject = (VSProject)p.Object;
+                            return Tuple.Create(p, vsProject.Events.ReferencesEvents);
+                        })
+                        .ToList();
+                })
+                .Select(package =>
+                    _ReferencesAddedEvents.Select(x =>
+                        Observable.FromEvent<_dispReferencesEvents_ReferenceAddedEventHandler, Reference>
                             (h => new _dispReferencesEvents_ReferenceAddedEventHandler(h)
                                 , h => x.Item2.ReferenceAdded += h
                                 , h => x.Item2.ReferenceAdded -= h
                             )
-                            .Select(reference => new {Project = x.Item1, Reference = reference});
-                    }
-                    catch (Exception e)
-                    {
-                        return Observable.Empty(new {Project = (Project) null, Reference = (Reference) null});
-                    }
-                })
-                .Merge()
+                            .Select(reference => new { Project = x.Item1, Reference = reference, Package = package })
+                        )
+                        .Merge()
+                        .TakeUntil(installFinished)
+                        .LastAsync()
+                )
+                .Switch()
                 .ObserveOn(SynchronizationContext.Current)
                 .Subscribe(x =>
                 {
                     var project = AsMsBuildProject(x.Project);
-                    FixReferences(project, Path.GetDirectoryName(dte.Solution.FullName));
+                    FixReferences(project, x.Package, GetSolutionDir(dte));
                     x.Project.Save();
                 });
-            };
 
             base.Initialize();
         }
 
-        private static void FixReferences(Microsoft.Build.Evaluation.Project project, string slnDir)
+        protected override void Dispose(bool disposing)
+        {
+            _Subscription.Dispose();
+
+            base.Dispose(disposing);
+        }
+
+        private static string GetSolutionDir(DTE dte)
+        {
+            return Path.GetDirectoryName(dte.Solution.FullName);
+        }
+
+        private static void FixReferences(Microsoft.Build.Evaluation.Project project, IVsPackageMetadata package, string slnDir)
         {
             foreach (var reference in project.GetItems("Reference"))
             {
@@ -108,12 +142,12 @@ namespace FixNuGetHintPath
                     continue;
                 }
                 var absoluteHintPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, hintPath));
-                if (!absoluteHintPath.StartsWith(slnDir))
+                if (!absoluteHintPath.StartsWith(package.InstallPath))
                 {
                     continue;
                 }
                 var path = absoluteHintPath.Substring(slnDir.Length).TrimStart(Path.DirectorySeparatorChar);
-                reference.SetMetadataValue("HintPath", @"$(SolutionDir)\" + path);
+                reference.SetMetadataValue("HintPath", "$(SolutionDir)" + path);
             }
         }
 
