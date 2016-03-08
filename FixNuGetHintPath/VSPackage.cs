@@ -6,15 +6,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EnvDTE;
-using Microsoft.Build.Evaluation;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -46,6 +44,7 @@ namespace FixNuGetHintPath
     [Guid(VSPackage.PackageGuidString)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
     [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
+    [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class VSPackage : Package
     {
         private List<Tuple<Project, ReferencesEvents>> _ReferencesAddedEvents;
@@ -84,10 +83,10 @@ namespace FixNuGetHintPath
                 );
 
             _Subscription = packageInstalled
-                .Where(x => x.InstallPath.StartsWith(GetSolutionDir(dte)))
+                .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
                 .Do(_ =>
                 {
-                    _ReferencesAddedEvents = dte.Solution.Projects.Cast<Project>()
+                    _ReferencesAddedEvents = dte.Solution.GetAllProjects()
                         .Select(p =>
                         {
                             var vsProject = (VSProject)p.Object;
@@ -112,12 +111,13 @@ namespace FixNuGetHintPath
                 .ObserveOn(SynchronizationContext.Current)
                 .Subscribe(x =>
                 {
-                    var project = AsMsBuildProject(x.Project);
-                    FixReferences(project, x.Package, GetSolutionDir(dte));
+                    var project = x.Project.AsMsBuildProject();
+                    NuGet.FixReferences(project, x.Package, dte.GetSolutionDir());
                     x.Project.Save();
                 });
 
             base.Initialize();
+            FixNuGetReferencesCommand.Initialize(this);
         }
 
         protected override void Dispose(bool disposing)
@@ -125,36 +125,6 @@ namespace FixNuGetHintPath
             _Subscription.Dispose();
 
             base.Dispose(disposing);
-        }
-
-        private static string GetSolutionDir(DTE dte)
-        {
-            return Path.GetDirectoryName(dte.Solution.FullName);
-        }
-
-        private static void FixReferences(Microsoft.Build.Evaluation.Project project, IVsPackageMetadata package, string slnDir)
-        {
-            foreach (var reference in project.GetItems("Reference"))
-            {
-                var hintPath = reference.GetMetadataValue("HintPath");
-                if (string.IsNullOrEmpty(hintPath))
-                {
-                    continue;
-                }
-                var absoluteHintPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, hintPath));
-                if (!absoluteHintPath.StartsWith(package.InstallPath))
-                {
-                    continue;
-                }
-                var path = absoluteHintPath.Substring(slnDir.Length).TrimStart(Path.DirectorySeparatorChar);
-                reference.SetMetadataValue("HintPath", "$(SolutionDir)" + path);
-            }
-        }
-
-        private static Microsoft.Build.Evaluation.Project AsMsBuildProject(Project project)
-        {
-            return ProjectCollection.GlobalProjectCollection.GetLoadedProjects(project.FullName).FirstOrDefault() ??
-                   ProjectCollection.GlobalProjectCollection.LoadProject(project.FullName);
         }
 
         #endregion
