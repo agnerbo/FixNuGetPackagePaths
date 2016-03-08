@@ -1,9 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="FixNuGetHintPath.Hewlett-Packard Company.1b193709-7fa7-46e9-af25-e3b7e1518f52" Version="1.0" Language="en-US" Publisher="Hewlett-Packard Company" />
+    <Identity Id="FixNuGetHintPath.1b193709-7fa7-46e9-af25-e3b7e1518f52" Version="0.0.1" Language="en-US" Publisher="Weingartner Maschinenbau GmbH" />
     <DisplayName>FixNuGetHintPath</DisplayName>
-    <Description>Empty VSIX Project.</Description>
+    <Description xml:space="preserve">When installing a NuGet package the path to the dlls are set relative to the solution that is open at the time the package is installed. This extension ensures that the paths are always relative to the solution that is currently open. That only really makes a difference if you have a project that is referenced from different solutions and those solutions live in different directories (e.g. when using git submodules).</Description>
+    <License>LICENSE</License>
+    <Tags>NuGet, HintPath, Project reference</Tags>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[14.0]" />
