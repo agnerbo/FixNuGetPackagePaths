@@ -1,0 +1,1 @@
+MSBuild.exe .\FixNuGetHintPath.sln /t:FixNuGetHintPath /p:Configuration=Release
