@@ -5,14 +5,11 @@
 //------------------------------------------------------------------------------
 
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
-using EnvDTE;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using NuGet.VisualStudio;
-using Project = Microsoft.Build.Evaluation.Project;
 
 namespace FixNuGetHintPath
 {
@@ -96,7 +93,7 @@ namespace FixNuGetHintPath
 
             var packages = installerServices.GetInstalledPackages().ToList();
 
-            var dte = (DTE)ServiceProvider.GetService(typeof(DTE));
+            var dte = (EnvDTE.DTE)ServiceProvider.GetService(typeof(EnvDTE.DTE));
 
             var allProjects = dte.Solution.GetAllProjects().ToList();
             foreach (var project in allProjects)
