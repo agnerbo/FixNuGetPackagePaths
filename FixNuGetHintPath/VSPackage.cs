@@ -59,6 +59,8 @@ namespace FixNuGetHintPath
         /// </summary>
         protected override void Initialize()
         {
+            base.Initialize();
+
             var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
 
             var installerEvents = componentModel.GetService<IVsPackageInstallerEvents>();
@@ -111,12 +113,14 @@ namespace FixNuGetHintPath
                 .ObserveOn(SynchronizationContext.Current)
                 .Subscribe(x =>
                 {
+                    Logger.Log($"===== Fix new references in {x.Project.Name} ======");
                     var project = x.Project.AsMsBuildProject();
-                    NuGet.FixReferences(project, x.Package, dte.GetSolutionDir());
-                    x.Project.Save();
+                    if (NuGet.FixReferences(project, x.Package, dte.GetSolutionDir()) > 0)
+                    {
+                        x.Project.Save();
+                    }
                 });
 
-            base.Initialize();
             FixNuGetReferencesCommand.Initialize(this);
         }
 

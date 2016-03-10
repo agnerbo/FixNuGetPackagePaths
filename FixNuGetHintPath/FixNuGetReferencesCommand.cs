@@ -99,8 +99,13 @@ namespace FixNuGetHintPath
             foreach (var project in allProjects)
             {
                 var msBuildProject = project.AsMsBuildProject();
-                NuGet.FixReferences(msBuildProject, packages, dte.GetSolutionDir());
-                project.Save();
+                Logger.Log($"===== Fix references in {project.Name} ======");
+                var fixedReferences = NuGet.FixReferences(msBuildProject, packages, dte.GetSolutionDir());
+                Logger.Log($"Fixed {fixedReferences} references");
+                if (fixedReferences > 0)
+                {
+                    project.Save();
+                }
             }
         }
     }

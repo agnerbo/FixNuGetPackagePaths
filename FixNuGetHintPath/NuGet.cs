@@ -8,28 +8,34 @@ namespace FixNuGetHintPath
 {
     public static class NuGet
     {
-        public static void FixReferences(Microsoft.Build.Evaluation.Project project, IReadOnlyCollection<IVsPackageMetadata> packages, string slnDir)
+        public static int FixReferences(Microsoft.Build.Evaluation.Project project, IReadOnlyCollection<IVsPackageMetadata> packages, string slnDir)
         {
+            const string pathAttributeName = "HintPath";
+            var result = 0;
             foreach (var reference in project.GetItems("Reference"))
             {
-                var hintPath = reference.GetMetadataValue("HintPath");
-                if (string.IsNullOrEmpty(hintPath))
+                var oldPath = reference.GetMetadataValue(pathAttributeName);
+                if (string.IsNullOrEmpty(oldPath))
                 {
                     continue;
                 }
-                var absoluteHintPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, hintPath));
-                if (!packages.Any(p => absoluteHintPath.StartsWith(p.InstallPath)))
+                var absoluteOldPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, oldPath));
+                if (!packages.Any(p => absoluteOldPath.StartsWith(p.InstallPath)))
                 {
                     continue;
                 }
-                var path = absoluteHintPath.Substring(slnDir.Length).TrimStart(Path.DirectorySeparatorChar);
-                reference.SetMetadataValue("HintPath", "$(SolutionDir)" + path);
+                var path = absoluteOldPath.Substring(slnDir.Length).TrimStart(Path.DirectorySeparatorChar);
+                var newPath = "$(SolutionDir)" + path;
+                Logger.Log($"{oldPath} --> {newPath}");
+                reference.SetMetadataValue(pathAttributeName, newPath);
+                result++;
             }
+            return result;
         }
 
-        public static void FixReferences(Microsoft.Build.Evaluation.Project project, IVsPackageMetadata package, string slnDir)
+        public static int FixReferences(Microsoft.Build.Evaluation.Project project, IVsPackageMetadata package, string slnDir)
         {
-            FixReferences(project, new[] { package }, slnDir);
+            return FixReferences(project, new[] { package }, slnDir);
         }
     }
 }
