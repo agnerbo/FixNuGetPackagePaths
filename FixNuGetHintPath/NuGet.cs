@@ -20,7 +20,7 @@ namespace FixNuGetHintPath
                     continue;
                 }
                 var absoluteOldPath = Path.GetFullPath(Path.Combine(project.DirectoryPath, oldPath));
-                if (!packages.Any(p => absoluteOldPath.StartsWith(p.InstallPath)))
+                if (!absoluteOldPath.StartsWith(slnDir) || !packages.Any(p => absoluteOldPath.StartsWith(p.InstallPath)))
                 {
                     continue;
                 }
