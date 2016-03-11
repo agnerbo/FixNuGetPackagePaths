@@ -91,7 +91,12 @@ namespace FixNuGetHintPath
             var componentModel = (IComponentModel)ServiceProvider.GetService(typeof(SComponentModel));
             var installerServices = componentModel.GetService<IVsPackageInstallerServices>();
 
-            var packages = installerServices.GetInstalledPackages().ToList();
+            var allPackages = installerServices.GetInstalledPackages().ToList();
+            var packages = allPackages.Where(p => !string.IsNullOrEmpty(p.InstallPath)).ToList();
+            foreach (var p in allPackages.Except(packages))
+            {
+                Logger.Log($"Can't fix references for {p.Id} because the install path is empty");
+            }
 
             var dte = (EnvDTE.DTE)ServiceProvider.GetService(typeof(EnvDTE.DTE));
 
