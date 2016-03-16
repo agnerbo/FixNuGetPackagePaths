@@ -68,15 +68,7 @@ namespace FixNuGetHintPath
                 (h => new VsPackageEventHandler(h)
                     , h => installerEvents.PackageReferenceAdded += h
                     , h => installerEvents.PackageReferenceAdded -= h
-                )
-                .Do(_ => { });
-
-            var events = (ReferencesEvents)dte.Events.GetObject("CSharpReferencesEvents");
-            events.ReferenceAdded += r => { };
-
-            var events2 = (ProjectItemsEvents) dte.Events.GetObject("CSharpProjectItemsEvents");
-            events2.ItemAdded += r => { };
-
+                );
 
             _Subscription = installFinished
                 .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
