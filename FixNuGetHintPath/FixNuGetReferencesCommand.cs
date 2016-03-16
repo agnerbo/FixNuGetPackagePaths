@@ -95,7 +95,7 @@ namespace FixNuGetHintPath
             var packages = allPackages.Where(p => !string.IsNullOrEmpty(p.InstallPath)).ToList();
             foreach (var p in allPackages.Except(packages))
             {
-                Logger.Log($"Can't fix references for {p.Id} because the install path is empty");
+                Logger.Log($"Can't fix paths for {p.Id} because the install path is empty.");
             }
 
             var dte = (EnvDTE.DTE)ServiceProvider.GetService(typeof(EnvDTE.DTE));
@@ -104,9 +104,9 @@ namespace FixNuGetHintPath
             foreach (var project in allProjects)
             {
                 var msBuildProject = project.AsMsBuildProject();
-                Logger.Log($"===== Fix references in {project.Name} ======");
+                Logger.Log($"===== Fix paths for all NuGet packages in project {project.Name} ======");
                 var fixedReferences = NuGet.FixPackagePaths(msBuildProject, packages, dte.GetSolutionDir());
-                Logger.Log($"Fixed {fixedReferences} references");
+                Logger.Log($"Fixed {fixedReferences} paths.");
                 if (fixedReferences > 0)
                 {
                     project.Save();

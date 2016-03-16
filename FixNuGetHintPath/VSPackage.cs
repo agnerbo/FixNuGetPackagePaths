@@ -85,9 +85,11 @@ namespace FixNuGetHintPath
                 {
                     foreach (var project in dte.Solution.GetAllProjects())
                     {
-                        Logger.Log($"===== Fix new references in {project.Name} ======");
+                        Logger.Log($"===== Fix paths for NuGet package {package.Id} in project {project.Name} ======");
                         var msBuildProject = project.AsMsBuildProject();
-                        if (NuGet.FixPackagePaths(msBuildProject, package, dte.GetSolutionDir()) > 0)
+                        var fixedPaths = NuGet.FixPackagePaths(msBuildProject, package, dte.GetSolutionDir());
+                        Logger.Log($"Fixed {fixedPaths} paths.");
+                        if (fixedPaths > 0)
                         {
                             project.Save();
                         }
