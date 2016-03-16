@@ -20,16 +20,24 @@ namespace FixNuGetHintPath
                 return originalUnevaluatedValue;
             }
 
-            var absoluteOldPath = Path.GetFullPath(Path.Combine(projectDir, originalEvaluatedValue));
-            if (!absoluteOldPath.StartsWith(slnDir) || !packages.Any(p => absoluteOldPath.StartsWith(p.InstallPath)))
+            try
             {
+                var absoluteOldPath = Path.GetFullPath(Path.Combine(projectDir, originalEvaluatedValue));
+                if (!absoluteOldPath.StartsWith(slnDir) || !packages.Any(p => absoluteOldPath.StartsWith(p.InstallPath)))
+                {
+                    return null;
+                }
+
+                var path = absoluteOldPath
+                    .Substring(slnDir.Length)
+                    .TrimStart(Path.DirectorySeparatorChar);
+                return basePathVariable + path;
+            }
+            catch (ArgumentException e) when (e.Message == "Illegal characters in path.")
+            {
+                Logger.Error($"Can't determine full path because path contains illegal characters: {originalEvaluatedValue}");
                 return null;
             }
-
-            var path = absoluteOldPath
-                .Substring(slnDir.Length)
-                .TrimStart(Path.DirectorySeparatorChar);
-            return basePathVariable + path;
         }
 
         private static string GetRelativePackagePath(MsBuild.ProjectMetadata metadata, IEnumerable<IVsPackageMetadata> packages, string slnDir, string projectDir)

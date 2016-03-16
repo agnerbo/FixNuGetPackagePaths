@@ -78,7 +78,14 @@ namespace FixNuGetHintPath
                     foreach (var project in dte.Solution.GetAllProjects())
                     {
                         Logger.Info($"===== Fix paths for NuGet package {package.Id} in project {project.Name} ======");
-                        NuGet.FixPackagePathsAndSaveProject(project, package, dte.GetSolutionDir());
+                        try
+                        {
+                            NuGet.FixPackagePathsAndSaveProject(project, package, dte.GetSolutionDir());
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"Unexpected error: {ex}");
+                        }
                     }
                 });
 
