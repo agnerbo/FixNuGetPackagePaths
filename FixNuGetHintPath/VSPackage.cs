@@ -57,6 +57,7 @@ namespace FixNuGetHintPath
         protected override void Initialize()
         {
             base.Initialize();
+            FixNuGetReferencesCommand.Initialize(this);
 
             var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
 
@@ -88,8 +89,6 @@ namespace FixNuGetHintPath
                         }
                     }
                 });
-
-            FixNuGetReferencesCommand.Initialize(this);
         }
 
         protected override void Dispose(bool disposing)
