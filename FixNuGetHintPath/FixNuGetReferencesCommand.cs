@@ -100,17 +100,10 @@ namespace FixNuGetHintPath
 
             var dte = (EnvDTE.DTE)ServiceProvider.GetService(typeof(EnvDTE.DTE));
 
-            var allProjects = dte.Solution.GetAllProjects().ToList();
-            foreach (var project in allProjects)
+            foreach (var project in dte.Solution.GetAllProjects())
             {
-                var msBuildProject = project.AsMsBuildProject();
-                Logger.Log($"===== Fix paths for all NuGet packages in project {project.Name} ======");
-                var fixedReferences = NuGet.FixPackagePaths(msBuildProject, packages, dte.GetSolutionDir());
-                Logger.Log($"Fixed {fixedReferences} paths.");
-                if (fixedReferences > 0)
-                {
-                    project.Save();
-                }
+                Logger.Info($"===== Fix paths for all NuGet packages in project {project.Name} ======");
+                NuGet.FixPackagePathsAndSaveProject(project, packages, dte.GetSolutionDir());
             }
         }
     }

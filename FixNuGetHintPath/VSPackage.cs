@@ -77,14 +77,8 @@ namespace FixNuGetHintPath
                 {
                     foreach (var project in dte.Solution.GetAllProjects())
                     {
-                        Logger.Log($"===== Fix paths for NuGet package {package.Id} in project {project.Name} ======");
-                        var msBuildProject = project.AsMsBuildProject();
-                        var fixedPaths = NuGet.FixPackagePaths(msBuildProject, package, dte.GetSolutionDir());
-                        Logger.Log($"Fixed {fixedPaths} paths.");
-                        if (fixedPaths > 0)
-                        {
-                            project.Save();
-                        }
+                        Logger.Info($"===== Fix paths for NuGet package {package.Id} in project {project.Name} ======");
+                        NuGet.FixPackagePathsAndSaveProject(project, package, dte.GetSolutionDir());
                     }
                 });
 
@@ -99,19 +93,5 @@ namespace FixNuGetHintPath
         }
 
         #endregion
-    }
-
-    public class ProjectEvents
-    {
-        public Project Project { get; }
-        public ReferencesEvents ReferencesEvents { get;}
-        public ImportsEvents ImportsEvent { get;}
-
-        public ProjectEvents(Project project, ReferencesEvents referencesEvents, ImportsEvents importsEvent)
-        {
-            Project = project;
-            ReferencesEvents = referencesEvents;
-            ImportsEvent = importsEvent;
-        }
     }
 }

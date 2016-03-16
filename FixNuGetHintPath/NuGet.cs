@@ -70,7 +70,7 @@ namespace FixNuGetHintPath
         {
             if (newValue != null && newValue != oldValue)
             {
-                Logger.Log($"Updating {name}: {oldValue} --> {newValue}");
+                Logger.Info($"Updating {name}: {oldValue} --> {newValue}");
                 set(newValue);
                 return 1;
             }
@@ -121,9 +121,20 @@ namespace FixNuGetHintPath
             return result;
         }
 
-        public static int FixPackagePaths(MsBuild.Project project, IVsPackageMetadata package, string slnDir)
+        public static void FixPackagePathsAndSaveProject(EnvDTE.Project project, IReadOnlyCollection<IVsPackageMetadata> packages, string solutionDir)
         {
-            return FixPackagePaths(project, new[] { package }, slnDir);
+            var msBuildProject = project.AsMsBuildProject();
+            var fixedPaths = FixPackagePaths(msBuildProject, packages, solutionDir);
+            Logger.Info($"Fixed {fixedPaths} paths.");
+            if (fixedPaths > 0)
+            {
+                project.Save();
+            }
+        }
+
+        public static void FixPackagePathsAndSaveProject(EnvDTE.Project project, IVsPackageMetadata package, string solutionDir)
+        {
+            FixPackagePathsAndSaveProject(project, new[] { package }, solutionDir);
         }
     }
 }
