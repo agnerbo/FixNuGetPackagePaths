@@ -5,8 +5,6 @@
 //------------------------------------------------------------------------------
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reactive.Linq;
@@ -47,7 +45,6 @@ namespace FixNuGetHintPath
     [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class VSPackage : Package
     {
-        private List<Tuple<Project, ReferencesEvents>> _ReferencesAddedEvents;
         private IDisposable _Subscription;
         public const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
 
@@ -67,57 +64,33 @@ namespace FixNuGetHintPath
 
             var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
 
-            // The events used here occur in the following order when a NuGet package is installed:
-            // 1. IVsPackageInstallerEvents.PackageInstalled
-            // 2. Project.Events.ReferencesEvents.ReferenceAdded
-            // 3. IVsPackageInstallerEvents.PackageReferenceAdded
-
-            var packageInstalled = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
-                (h => new VsPackageEventHandler(h)
-                    , h => installerEvents.PackageInstalled += h
-                    , h => installerEvents.PackageInstalled -= h
-                );
-
             var installFinished = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
                 (h => new VsPackageEventHandler(h)
                     , h => installerEvents.PackageReferenceAdded += h
                     , h => installerEvents.PackageReferenceAdded -= h
-                );
-
-            _Subscription = packageInstalled
-                .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
-                .Do(_ =>
-                {
-                    _ReferencesAddedEvents = dte.Solution.GetAllProjects()
-                        .Select(p =>
-                        {
-                            var vsProject = (VSProject)p.Object;
-                            return Tuple.Create(p, vsProject.Events.ReferencesEvents);
-                        })
-                        .ToList();
-                })
-                .Select(package =>
-                    _ReferencesAddedEvents.Select(x =>
-                        Observable.FromEvent<_dispReferencesEvents_ReferenceAddedEventHandler, Reference>
-                            (h => new _dispReferencesEvents_ReferenceAddedEventHandler(h)
-                                , h => x.Item2.ReferenceAdded += h
-                                , h => x.Item2.ReferenceAdded -= h
-                            )
-                            .Select(reference => new { Project = x.Item1, Reference = reference, Package = package })
-                        )
-                        .Merge()
-                        .TakeUntil(installFinished)
-                        .LastAsync()
                 )
-                .Switch()
+                .Do(_ => { });
+
+            var events = (ReferencesEvents)dte.Events.GetObject("CSharpReferencesEvents");
+            events.ReferenceAdded += r => { };
+
+            var events2 = (ProjectItemsEvents) dte.Events.GetObject("CSharpProjectItemsEvents");
+            events2.ItemAdded += r => { };
+
+
+            _Subscription = installFinished
+                .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
                 .ObserveOn(SynchronizationContext.Current)
-                .Subscribe(x =>
+                .Subscribe(package =>
                 {
-                    Logger.Log($"===== Fix new references in {x.Project.Name} ======");
-                    var project = x.Project.AsMsBuildProject();
-                    if (NuGet.FixReferences(project, x.Package, dte.GetSolutionDir()) > 0)
+                    foreach (var project in dte.Solution.GetAllProjects())
                     {
-                        x.Project.Save();
+                        Logger.Log($"===== Fix new references in {project.Name} ======");
+                        var msBuildProject = project.AsMsBuildProject();
+                        if (NuGet.FixPackagePaths(msBuildProject, package, dte.GetSolutionDir()) > 0)
+                        {
+                            project.Save();
+                        }
                     }
                 });
 
@@ -132,5 +105,19 @@ namespace FixNuGetHintPath
         }
 
         #endregion
+    }
+
+    public class ProjectEvents
+    {
+        public Project Project { get; }
+        public ReferencesEvents ReferencesEvents { get;}
+        public ImportsEvents ImportsEvent { get;}
+
+        public ProjectEvents(Project project, ReferencesEvents referencesEvents, ImportsEvents importsEvent)
+        {
+            Project = project;
+            ReferencesEvents = referencesEvents;
+            ImportsEvent = importsEvent;
+        }
     }
 }

@@ -105,7 +105,7 @@ namespace FixNuGetHintPath
             {
                 var msBuildProject = project.AsMsBuildProject();
                 Logger.Log($"===== Fix references in {project.Name} ======");
-                var fixedReferences = NuGet.FixReferences(msBuildProject, packages, dte.GetSolutionDir());
+                var fixedReferences = NuGet.FixPackagePaths(msBuildProject, packages, dte.GetSolutionDir());
                 Logger.Log($"Fixed {fixedReferences} references");
                 if (fixedReferences > 0)
                 {
