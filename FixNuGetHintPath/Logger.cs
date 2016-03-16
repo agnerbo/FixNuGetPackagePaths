@@ -27,9 +27,12 @@ namespace FixNuGetHintPath
             return pane;
         }
 
-        public static void Log(string message)
+        public static void Info(string message) => Output("Info", message);
+        public static void Error(string message) => Output("Error", message);
+
+        private static void Output(string type, string message)
         {
-            OutputWindow.Value.OutputString(message + Environment.NewLine);
+            OutputWindow.Value.OutputString($"[{type}] {message}{Environment.NewLine}");
         }
     }
 }

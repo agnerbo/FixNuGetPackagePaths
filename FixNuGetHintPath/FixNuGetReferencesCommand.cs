@@ -95,7 +95,7 @@ namespace FixNuGetHintPath
             var packages = allPackages.Where(p => !string.IsNullOrEmpty(p.InstallPath)).ToList();
             foreach (var p in allPackages.Except(packages))
             {
-                Logger.Log($"Can't fix paths for {p.Id} because the install path is empty.");
+                Logger.Error($"Can't fix paths for {p.Id} because the install path is empty.");
             }
 
             var dte = (EnvDTE.DTE)ServiceProvider.GetService(typeof(EnvDTE.DTE));
