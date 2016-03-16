@@ -50,7 +50,6 @@ namespace FixNuGetHintPath
             return Regex.Replace
                 (oldText
                     , @"(?<=^\$\(\[System\.String\]::Format\('\$\(ErrorText\)', ').*(?='\)\)$)"
-                    // TODO hope that `m.Value` doesn't contain MSBuild variables
                     , m => GetRelativePackagePath(m.Value, m.Value, packages, slnDir, projectDirPath) ?? m.Value
                 );
         }
@@ -60,7 +59,6 @@ namespace FixNuGetHintPath
             return Regex.Replace
                 (oldCondition
                 , @"(?<=^!Exists\(').*(?='\)$)"
-                // TODO hope that `m.Value` doesn't contain MSBuild variables
                 , m => GetRelativePackagePath(m.Value, m.Value, packages, slnDir, projectDirPath) ?? m.Value
                 );
         }
