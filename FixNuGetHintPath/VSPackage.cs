@@ -45,7 +45,8 @@ namespace FixNuGetHintPath
     [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class VSPackage : Package
     {
-        private IDisposable _Subscription;
+        private IDisposable _InstallSubscription;
+        private IDisposable _UninstallSubscription;
         public const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
 
         #region Package Members
@@ -65,13 +66,21 @@ namespace FixNuGetHintPath
 
             var dte = (DTE)ServiceProvider.GlobalProvider.GetService(typeof(DTE));
 
-            var installFinished = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>
-                (h => new VsPackageEventHandler(h)
-                    , h => installerEvents.PackageReferenceAdded += h
-                    , h => installerEvents.PackageReferenceAdded -= h
-                );
+            // Order of events when installing a package:
+            // 1. PackageInstalling
+            // 2. PackageInstalled
+            // 3. PackageReferenceAdded
+            // Order of events when uninstalling a package:
+            // 1. PackageUninstalling
+            // 2. PackageReferenceRemoved
+            // 3. PackageUninstalled
 
-            _Subscription = installFinished
+            var installFinished = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>(
+                h => new VsPackageEventHandler(h),
+                h => installerEvents.PackageReferenceAdded += h,
+                h => installerEvents.PackageReferenceAdded -= h);
+
+            _InstallSubscription = installFinished
                 .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
                 .ObserveOn(SynchronizationContext.Current)
                 .Subscribe(package =>
@@ -89,11 +98,36 @@ namespace FixNuGetHintPath
                         }
                     }
                 });
+
+            var uninstallStarted = Observable.FromEvent<VsPackageEventHandler, IVsPackageMetadata>(
+                h => new VsPackageEventHandler(h),
+                h => installerEvents.PackageUninstalling += h,
+                h => installerEvents.PackageUninstalling -= h);
+
+            _UninstallSubscription = uninstallStarted
+                .Where(x => x.InstallPath.StartsWith(dte.GetSolutionDir()))
+                .ObserveOn(SynchronizationContext.Current)
+                .Subscribe(package =>
+                {
+                    foreach (var project in dte.Solution.GetAllProjects())
+                    {
+                        Logger.Info($"===== Restore paths for NuGet package {package.Id} in project {project.Name} ======");
+                        try
+                        {
+                            NuGet.RevertPackagePaths(project, package, dte.GetSolutionDir());
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"Unexpected error: {ex}");
+                        }
+                    }
+                });
         }
 
         protected override void Dispose(bool disposing)
         {
-            _Subscription.Dispose();
+            _InstallSubscription.Dispose();
+            _UninstallSubscription.Dispose();
 
             base.Dispose(disposing);
         }
