@@ -7,7 +7,7 @@ using Microsoft.Build.Construction;
 using MsBuild = Microsoft.Build.Evaluation;
 using NuGet.VisualStudio;
 
-namespace FixNuGetHintPath
+namespace FixNuGetPackagePaths
 {
     public static class NuGet
     {

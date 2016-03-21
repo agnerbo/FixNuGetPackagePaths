@@ -3,7 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace FixNuGetHintPath
+namespace FixNuGetPackagePaths
 {
     public static class PathHelper
     {

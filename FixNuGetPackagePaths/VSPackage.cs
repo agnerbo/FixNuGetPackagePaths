@@ -9,19 +9,19 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.VisualStudio;
 
-namespace FixNuGetHintPath
+namespace FixNuGetPackagePaths
 {
     [PackageRegistration(UseManagedResourcesOnly = true)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)] // Info on this package for Help/About
-    [Guid(VSPackage.PackageGuidString)]
+    [Guid(PackageGuidString)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
     [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    public sealed class VSPackage : Package
+    public sealed class VsPackage : Package
     {
         private IDisposable _InstallSubscription;
         private IDisposable _UninstallSubscription;
-        public const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
+        private const string PackageGuidString = "41ae4a56-653c-439f-b1ac-7dec17faa923";
 
         #region Package Members
 

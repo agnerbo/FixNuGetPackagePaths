@@ -4,7 +4,7 @@ using System.Linq;
 using EnvDTE80;
 using MSBuild = Microsoft.Build.Evaluation;
 
-namespace FixNuGetHintPath
+namespace FixNuGetPackagePaths
 {
     public static class DteHelper
     {
