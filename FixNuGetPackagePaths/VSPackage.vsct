@@ -56,7 +56,7 @@
         <Parent guid="guidVSPackageCmdSet" id="MyMenuGroup" />
         <!--<Icon guid="guidImages" id="bmpPic1" />-->
         <Strings>
-          <ButtonText>Fix NuGet hint paths</ButtonText>
+          <ButtonText>Fix NuGet package paths</ButtonText>
         </Strings>
         <CommandFlag>DynamicVisibility</CommandFlag>
       </Button>
